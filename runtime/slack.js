@@ -1,12 +1,7 @@
 import { App } from "@slack/bolt";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
 import { classifyIntent } from "./intent.js";
-
-neonConfig.webSocketConstructor = ws;
-const databaseUrl = process.env.DATABASE_URL;
-console.log("DATABASE_URL present:", Boolean(databaseUrl));
-const pool = new Pool({ connectionString: databaseUrl });
+import { nlToSql } from "./llm.js";
+import { pool } from "./db.js";
 
 const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
@@ -26,19 +21,20 @@ app.message(async ({ message, say }) => {
   }
 
   if (intent === "revenue") {
-    if (!databaseUrl) {
-      await say("Database is not configured yet. Please set DATABASE_URL.");
+    const sql = await nlToSql(text);
+    const normalized = sql.trim().toLowerCase();
+    const banned = ["insert", "update", "delete", "drop", "alter", "create"];
+    const isSelect = normalized.startsWith("select");
+    const hasBanned = banned.some((kw) => normalized.includes(kw));
+
+    if (!isSelect || hasBanned) {
+      await say("Unsafe query blocked. Please ask a read-only question.");
       return;
     }
 
-    const result = await pool.query(
-      `SELECT COALESCE(SUM("amount"), 0) AS revenue
-       FROM "RevenueEvent"
-       WHERE "createdAt" >= NOW() - INTERVAL '7 days'`
-    );
-    const total = Number(result.rows?.[0]?.revenue ?? 0);
-
-    await say(`📊 Revenue (last 7 days): $${total}`);
+    const result = await pool.query(sql);
+    const value = result.rows?.[0]?.revenue ?? result.rows?.[0]?.sum ?? 0;
+    await say(`📊 Result: $${value}`);
     return;
   }
 
