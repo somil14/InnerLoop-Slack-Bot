@@ -1,13 +1,11 @@
 import { App } from "@slack/bolt";
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neon } from "@neondatabase/serverless";
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
-});
+const sql = neon(process.env.DATABASE_URL);
+const adapter = new PrismaNeon(sql);
+const prisma = new PrismaClient({ adapter });
 
 const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
