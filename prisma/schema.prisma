@@ -19,3 +19,9 @@ model MetricQuery {
   sqlKey    String
   createdAt DateTime @default(now())
 }
+
+model RevenueEvent {
+  id        String   @id @default(cuid())
+  amount    Int
+  createdAt DateTime @default(now())
+}

@@ -1,11 +1,13 @@
 import { App } from "@slack/bolt";
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { neon } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
 import { classifyIntent } from "./intent.js";
 
-const sql = neon(process.env.DATABASE_URL);
-const adapter = new PrismaNeon(sql);
+neonConfig.webSocketConstructor = ws;
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaNeon(pool);
 const prisma = new PrismaClient({ adapter });
 
 const app = new App({
@@ -26,7 +28,18 @@ app.message(async ({ message, say }) => {
   }
 
   if (intent === "revenue") {
-    await say("📊 Revenue questions are coming soon.");
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+
+    const events = await prisma.revenueEvent.findMany({
+      where: {
+        createdAt: { gte: since },
+      },
+    });
+
+    const total = events.reduce((sum, e) => sum + e.amount, 0);
+
+    await say(`📊 Revenue (last 7 days): $${total}`);
     return;
   }
 
