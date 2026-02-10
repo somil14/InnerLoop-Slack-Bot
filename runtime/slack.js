@@ -21,7 +21,14 @@ app.message(async ({ message, say }) => {
   }
 
   if (intent === "revenue") {
-    const sql = await nlToSql(text);
+    let sql;
+    try {
+      sql = await nlToSql(text);
+    } catch (err) {
+      console.error("LLM error:", err);
+      await say("OpenAI quota/error. Please try again later.");
+      return;
+    }
     const normalized = sql.trim().toLowerCase();
     const banned = ["insert", "update", "delete", "drop", "alter", "create"];
     const isSelect = normalized.startsWith("select");
