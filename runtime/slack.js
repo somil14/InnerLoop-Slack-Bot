@@ -3,6 +3,20 @@ import { classifyIntent } from "./intent.js";
 import { nlToSql } from "./llm.js";
 import { pool } from "./db.js";
 
+const sqlCache = new Map([
+  [
+    "show revenue",
+    `SELECT COALESCE(SUM("amount"), 0) AS revenue
+     FROM "RevenueEvent"
+     WHERE "createdAt" >= NOW() - INTERVAL '7 days'`,
+  ],
+]);
+
+function needsLLM(text) {
+  const t = text.toLowerCase();
+  return t.includes("revenue") || t.includes("sales") || t.includes("compare");
+}
+
 const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
   token: process.env.SLACK_BOT_TOKEN,
@@ -21,22 +35,37 @@ app.message(async ({ message, say }) => {
   }
 
   if (intent === "revenue") {
-    let sql;
-    try {
-      sql = await nlToSql(text);
-    } catch (err) {
-      console.error("LLM error:", err);
-      await say("OpenAI quota/error. Please try again later.");
-      return;
+    const normalizedText = text.trim().toLowerCase();
+    const cached = sqlCache.get(normalizedText);
+    let sql = cached;
+
+    if (!sql) {
+      if (!needsLLM(text)) {
+        await say("I can help with revenue and metrics.");
+        return;
+      }
+
+      try {
+        sql = await nlToSql(text);
+      } catch (err) {
+        console.error("LLM error:", err);
+        await say("⚠️ AI is temporarily unavailable. Try predefined commands.");
+        return;
+      }
     }
-    const normalized = sql.trim().toLowerCase();
+
+    const normalizedSql = sql.trim().toLowerCase();
     const banned = ["insert", "update", "delete", "drop", "alter", "create"];
-    const isSelect = normalized.startsWith("select");
-    const hasBanned = banned.some((kw) => normalized.includes(kw));
+    const isSelect = normalizedSql.startsWith("select");
+    const hasBanned = banned.some((kw) => normalizedSql.includes(kw));
 
     if (!isSelect || hasBanned) {
       await say("Unsafe query blocked. Please ask a read-only question.");
       return;
+    }
+
+    if (!cached) {
+      sqlCache.set(normalizedText, sql);
     }
 
     const result = await pool.query(sql);
