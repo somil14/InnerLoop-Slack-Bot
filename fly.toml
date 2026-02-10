@@ -7,9 +7,7 @@ app = 'innerloop-slack-bot'
 primary_region = 'bom'
 
 [build]
-
-[processes]
-  app = "node runtime/slack.js"
+  dockerfile = "Dockerfile.worker"
 
 [[vm]]
   memory = '1gb'
