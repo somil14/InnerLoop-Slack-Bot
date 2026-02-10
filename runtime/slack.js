@@ -1,16 +1,9 @@
 import { App } from "@slack/bolt";
-import { classifyIntent } from "./intent.js";
 import { nlToSql } from "./llm.js";
 import { pool } from "./db.js";
-
-const sqlCache = new Map([
-  [
-    "show revenue",
-    `SELECT COALESCE(SUM("amount"), 0) AS revenue
-     FROM "RevenueEvent"
-     WHERE "createdAt" >= NOW() - INTERVAL '7 days'`,
-  ],
-]);
+import { HELP_TEXT } from "./help.js";
+import { detectIntent } from "./intentMatcher.js";
+import { getCache, setCache } from "./cache.js";
 
 function needsLLM(text) {
   const t = text.toLowerCase();
@@ -27,17 +20,24 @@ app.message(async ({ message, say }) => {
   if (!message || !("text" in message) || !message.text) return;
 
   const text = message.text || "";
-  const intent = classifyIntent(text);
+  const intent = detectIntent(text);
 
-  if (intent === "smalltalk") {
-    await say("👋 Hey! How can I help you with your business data?");
+  if (text.trim().toLowerCase() === "help") {
+    await say(HELP_TEXT);
     return;
   }
 
-  if (intent === "revenue") {
+  if (intent === "REVENUE") {
     const normalizedText = text.trim().toLowerCase();
-    const cached = sqlCache.get(normalizedText);
-    let sql = cached;
+    const hardcoded =
+      normalizedText === "show revenue"
+        ? `SELECT COALESCE(SUM("amount"), 0) AS revenue
+           FROM "RevenueEvent"
+           WHERE "createdAt" >= NOW() - INTERVAL '7 days'`
+        : null;
+
+    const cached = getCache(`nl:${normalizedText}`);
+    let sql = hardcoded || cached?.sql;
 
     if (!sql) {
       if (!needsLLM(text)) {
@@ -64,13 +64,23 @@ app.message(async ({ message, say }) => {
       return;
     }
 
-    if (!cached) {
-      sqlCache.set(normalizedText, sql);
+    if (!hardcoded && !cached) {
+      setCache(`nl:${normalizedText}`, { sql });
     }
 
     const result = await pool.query(sql);
     const value = result.rows?.[0]?.revenue ?? result.rows?.[0]?.sum ?? 0;
     await say(`📊 Result: $${value}`);
+    return;
+  }
+
+  if (intent === "USERS") {
+    await say("👥 User metrics are coming soon.");
+    return;
+  }
+
+  if (intent === "EVENTS") {
+    await say("📈 Events metrics are coming soon.");
     return;
   }
 
