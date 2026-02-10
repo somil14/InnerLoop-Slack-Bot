@@ -6,7 +6,9 @@ import ws from "ws";
 import { classifyIntent } from "./intent.js";
 
 neonConfig.webSocketConstructor = ws;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const databaseUrl = process.env.DATABASE_URL;
+console.log("DATABASE_URL present:", Boolean(databaseUrl));
+const pool = new Pool({ connectionString: databaseUrl });
 const adapter = new PrismaNeon(pool);
 const prisma = new PrismaClient({ adapter });
 
@@ -28,6 +30,11 @@ app.message(async ({ message, say }) => {
   }
 
   if (intent === "revenue") {
+    if (!databaseUrl) {
+      await say("Database is not configured yet. Please set DATABASE_URL.");
+      return;
+    }
+
     const since = new Date();
     since.setDate(since.getDate() - 7);
 
