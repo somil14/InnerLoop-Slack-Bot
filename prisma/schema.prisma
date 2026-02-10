@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SlackWorkspace {
+  id          String   @id @default(uuid())
+  teamId      String   @unique
+  botToken    String
+  installedAt DateTime @default(now())
+}
+
+model MetricQuery {
+  id        String   @id @default(uuid())
+  intent    String
+  sqlKey    String
+  createdAt DateTime @default(now())
+}

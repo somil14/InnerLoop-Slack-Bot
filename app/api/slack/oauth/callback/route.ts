@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -38,6 +41,16 @@ export async function GET(req: NextRequest) {
   // data.team.id
   // data.enterprise?.id
   // data.scope
+
+  await prisma.slackWorkspace.upsert({
+    where: { teamId: data.team.id },
+    update: { botToken: data.access_token },
+    create: {
+      teamId: data.team.id,
+      botToken: data.access_token,
+    },
+  });
+
 
   return NextResponse.redirect(
     'https://innerloop-bot.vercel.app/success'
