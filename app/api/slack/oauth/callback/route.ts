@@ -57,8 +57,25 @@ export async function GET(req: NextRequest) {
     tokenType: data.token_type,
   });
 
-  if (!accessToken || !accessToken.startsWith('xoxb-')) {
-    console.error('Expected xoxb bot token, received:', accessPrefix);
+  if (data.token_type !== 'bot') {
+    console.error('Expected token_type=bot, received:', data.token_type);
+    return NextResponse.json(
+      { error: 'Bot token not issued. Reinstall the app.' },
+      { status: 500 }
+    );
+  }
+
+  const isBotAccessToken =
+    !!accessToken &&
+    (accessToken.startsWith('xoxb-') ||
+      accessToken.startsWith('xoxe-') ||
+      accessToken.startsWith('xoxe.xoxb-'));
+
+  if (!isBotAccessToken) {
+    console.error(
+      'Expected bot access token (xoxb- or xoxe.*), received:',
+      accessPrefix
+    );
     return NextResponse.json(
       { error: 'Bot token not issued. Reinstall the app.' },
       { status: 500 }
