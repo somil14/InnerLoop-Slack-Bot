@@ -1,13 +1,29 @@
 import { App } from "@slack/bolt";
-import { nlToSql } from "./llm.js";
+import { classifyIntent } from "./llm.js";
 import { pool } from "./db.js";
 import { HELP_TEXT } from "./help.js";
 import { detectIntent } from "./intentMatcher.js";
 import { getCache, setCache } from "./cache.js";
+import { QUERY_SURFACE } from "./querySurface.js";
 
-function needsLLM(text) {
-  const t = text.toLowerCase();
-  return t.includes("revenue") || t.includes("sales") || t.includes("compare");
+const REVENUE_INTENTS = QUERY_SURFACE?.intents || {};
+const CACHE_TTL_SECONDS = QUERY_SURFACE?.cache?.ttlSeconds ?? 86400;
+
+function normalizeText(text) {
+  return text.trim().toLowerCase();
+}
+
+function getSqlForIntent(intentKey) {
+  const intent = REVENUE_INTENTS[intentKey];
+  return intent?.sqlTemplate?.trim() || null;
+}
+
+async function resolveTenantId(teamId) {
+  const tenantResult = await pool.query(
+    `SELECT "id" FROM "Tenant" WHERE "slackTeamId" = $1 LIMIT 1`,
+    [teamId]
+  );
+  return tenantResult.rows?.[0]?.id || null;
 }
 
 const app = new App({
@@ -16,37 +32,61 @@ const app = new App({
   socketMode: true,
 });
 
-app.message(async ({ message, say }) => {
+app.message(async ({ message, say, context }) => {
   if (!message || !("text" in message) || !message.text) return;
 
   const text = message.text || "";
   const intent = detectIntent(text);
+  const normalizedText = normalizeText(text);
 
-  if (text.trim().toLowerCase() === "help") {
+  if (normalizedText === "help") {
     await say(HELP_TEXT);
     return;
   }
 
   if (intent === "REVENUE") {
-    const normalizedText = text.trim().toLowerCase();
-    const hardcoded =
-      normalizedText === "show revenue"
-        ? `SELECT COALESCE(SUM("amount"), 0) AS revenue
-           FROM "RevenueEvent"
-           WHERE "createdAt" >= NOW() - INTERVAL '7 days'`
-        : null;
+    const teamId = context?.teamId || message.team;
+    if (!teamId) {
+      await say("Missing team context. Please reinstall the app.");
+      return;
+    }
 
-    const cached = getCache(`nl:${normalizedText}`);
-    let sql = hardcoded || cached?.sql;
+    const tenantId = await resolveTenantId(teamId);
+
+    if (!tenantId) {
+      await say("Workspace not registered. Please reinstall the app.");
+      return;
+    }
+
+    const hardcodedIntent =
+      normalizedText === "show revenue" ? "REVENUE_7D" : null;
+    const cached = getCache(`${tenantId}:${normalizedText}`);
+    let intentKey = hardcodedIntent || cached?.intent;
+    let sql = intentKey ? getSqlForIntent(intentKey) : null;
 
     if (!sql) {
-      if (!needsLLM(text)) {
-        await say("I can help with revenue and metrics.");
-        return;
-      }
-
       try {
-        sql = await nlToSql(text);
+        const raw = await classifyIntent(text);
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          await say("⚠️ Could not understand the question. Try simpler wording.");
+          return;
+        }
+
+        const llmIntent = parsed?.intent;
+        if (!llmIntent || !REVENUE_INTENTS[llmIntent]) {
+          await say("⚠️ I can only help with revenue questions right now.");
+          return;
+        }
+
+        intentKey = llmIntent;
+        sql = getSqlForIntent(intentKey);
+        if (!sql) {
+          await say("⚠️ Intent recognized but no SQL template found.");
+          return;
+        }
       } catch (err) {
         console.error("LLM error:", err);
         await say("⚠️ AI is temporarily unavailable. Try predefined commands.");
@@ -58,18 +98,32 @@ app.message(async ({ message, say }) => {
     const banned = ["insert", "update", "delete", "drop", "alter", "create"];
     const isSelect = normalizedSql.startsWith("select");
     const hasBanned = banned.some((kw) => normalizedSql.includes(kw));
+    const hasTenantFilter = normalizedSql.includes("tenantid") || normalizedSql.includes("tenant_id");
 
-    if (!isSelect || hasBanned) {
+    if (!isSelect || hasBanned || !hasTenantFilter) {
       await say("Unsafe query blocked. Please ask a read-only question.");
       return;
     }
 
-    if (!hardcoded && !cached) {
-      setCache(`nl:${normalizedText}`, { sql });
+    if (!hardcodedIntent && !cached) {
+      setCache(
+        `${tenantId}:${normalizedText}`,
+        { intent: intentKey },
+        CACHE_TTL_SECONDS
+      );
     }
 
-    const result = await pool.query(sql);
-    const value = result.rows?.[0]?.revenue ?? result.rows?.[0]?.sum ?? 0;
+    const result = await pool.query(sql, [tenantId]);
+    const row = result.rows?.[0] || {};
+
+    if (row.this_week !== undefined || row.last_week !== undefined) {
+      await say(
+        `📊 This week: $${row.this_week ?? 0}, last week: $${row.last_week ?? 0}`
+      );
+      return;
+    }
+
+    const value = row.revenue ?? row.sum ?? 0;
     await say(`📊 Result: $${value}`);
     return;
   }

@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "slack:listen": "tsx runtime/slack.ts",
+    "aggregate:revenue": "node runtime/aggregate.js",
+    "aggregate:users": "node runtime/aggregateUsers.js",
+    "seed": "npx prisma db execute --file prisma/seed.sql",
     "lint": "eslint"
   },
   "dependencies": {
@@ -19,7 +22,8 @@
     "prisma": "^7.3.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tsx": "^4.20.5"
+    "tsx": "^4.20.5",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.7.10",

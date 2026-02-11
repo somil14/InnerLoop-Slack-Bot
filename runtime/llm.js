@@ -1,22 +1,27 @@
 import OpenAI from "openai";
+import { QUERY_SURFACE } from "./querySurface.js";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function nlToSql(question) {
+export async function classifyIntent(question) {
+  const intentKeys = Object.keys(QUERY_SURFACE.intents || {});
+  const intentList = intentKeys.length > 0 ? intentKeys : ["UNKNOWN"];
+
   const prompt = `
-You are a SQL generator.
+You are an intent classifier for analytics queries.
 
-Rules:
-- PostgreSQL only
-- Read-only queries (SELECT)
-- Use table: "RevenueEvent"("amount", "createdAt")
-- Never explain
-- Output ONLY SQL
+Return ONLY valid JSON in this format:
+{"intent":"REVENUE_7D"}
 
-User question:
-"${question}"
+Allowed intents:
+${intentList.map((i) => `- ${i}`).join("\n")}
+
+If the question does not match any intent, return:
+{"intent":"UNKNOWN"}
+
+User question: "${question}"
 `;
 
   const response = await openai.chat.completions.create({

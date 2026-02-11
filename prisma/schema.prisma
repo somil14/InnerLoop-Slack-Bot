@@ -6,22 +6,63 @@ datasource db {
   provider = "postgresql"
 }
 
-model SlackWorkspace {
-  id          String   @id @default(uuid())
-  teamId      String   @unique
-  botToken    String
-  installedAt DateTime @default(now())
-}
-
 model MetricQuery {
   id        String   @id @default(uuid())
+  tenantId  String
+  question  String
   intent    String
   sqlKey    String
+  resolved  Boolean  @default(false)
+  confidence Float?
   createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, intent])
+}
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  slackTeamId String   @unique
+  botToken    String?
+  plan        String   @default("free")
+  createdAt   DateTime @default(now())
+
+  revenueEvents RevenueEvent[]
+  revenueDaily  RevenueDaily[]
+  userDaily     UserDaily[]
+  metricQueries MetricQuery[]
 }
 
 model RevenueEvent {
   id        String   @id @default(cuid())
-  amount    Int
+  tenantId  String
+  amount    Decimal  @db.Decimal(12, 2)
   createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+}
+
+model RevenueDaily {
+  tenantId String
+  date     DateTime
+  total    Decimal @db.Decimal(12, 2)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, date])
+}
+
+model UserDaily {
+  tenantId String
+  date     DateTime
+  active   Int
+  new      Int
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, date])
 }

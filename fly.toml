@@ -9,6 +9,10 @@ primary_region = 'bom'
 [build]
   dockerfile = "Dockerfile.worker"
 
+[[cron]]
+  schedule = "5 0 * * *"
+  command = "node runtime/aggregate.js && node runtime/aggregateUsers.js"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'

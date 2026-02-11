@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -42,11 +40,12 @@ export async function GET(req: NextRequest) {
   // data.enterprise?.id
   // data.scope
 
-  await prisma.slackWorkspace.upsert({
-    where: { teamId: data.team.id },
+  await prisma.tenant.upsert({
+    where: { slackTeamId: data.team.id },
     update: { botToken: data.access_token },
     create: {
-      teamId: data.team.id,
+      name: data.team.id,
+      slackTeamId: data.team.id,
       botToken: data.access_token,
     },
   });
