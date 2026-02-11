@@ -224,7 +224,66 @@ app.message(async ({ message, say, context }) => {
   }
 
   if (intent === "EVENTS") {
-    await say("📈 Events metrics are coming soon.");
+    const teamId = context?.teamId || message.team;
+    if (!teamId) {
+      await say("Missing team context. Please reinstall the app.");
+      return;
+    }
+
+    const tenant = await resolveTenant(teamId);
+    if (!tenant?.id) {
+      await say("Workspace not registered. Please reinstall the app.");
+      return;
+    }
+    const tenantId = tenant.id;
+
+    const limit = await checkLimit(tenant.plan, tenantId, "queries");
+    if (!limit.allowed) {
+      await say(
+        `⚠️ Query limit reached (${limit.used}/${limit.limit}). Please upgrade your plan.`
+      );
+      return;
+    }
+
+    const isTop = normalizedText.includes("top");
+    const intentKey = isTop ? "TOP_EVENTS_7D" : "EVENTS_COUNT_7D";
+    const sql = getSqlForIntent(intentKey);
+
+    if (!sql) {
+      await say("⚠️ No SQL template found for event metrics.");
+      return;
+    }
+
+    const normalizedSql = sql.trim().toLowerCase();
+    const banned = ["insert", "update", "delete", "drop", "alter", "create"];
+    const isSelect = normalizedSql.startsWith("select");
+    const hasBanned = banned.some((kw) => normalizedSql.includes(kw));
+    const hasTenantFilter =
+      normalizedSql.includes("tenantid") || normalizedSql.includes("tenant_id");
+
+    if (!isSelect || hasBanned || !hasTenantFilter) {
+      await say("Unsafe query blocked. Please ask a read-only question.");
+      return;
+    }
+
+    const result = await pool.query(sql, [tenantId]);
+
+    if (isTop) {
+      const rows = result.rows || [];
+      if (rows.length === 0) {
+        await say("📈 No events recorded yet.");
+      } else {
+        const lines = rows
+          .map((row) => `• ${row.event}: ${row.total ?? 0}`)
+          .join("\n");
+        await say(`📈 Top events (7d)\n${lines}`);
+      }
+    } else {
+      const row = result.rows?.[0] || {};
+      await say(`📈 Events (7d): ${row.total_events ?? 0}`);
+    }
+
+    await incrementUsage(tenantId, "queries", 1);
     return;
   }
 

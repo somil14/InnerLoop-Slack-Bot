@@ -19,6 +19,12 @@ export const QUERY_SURFACE = {
       timeGrains: ["day", "week", "month"],
       aggregations: ["sum", "avg"],
     },
+    events: {
+      tables: ["EventDaily"],
+      fields: ["date", "event", "count"],
+      timeGrains: ["day", "week"],
+      aggregations: ["sum"],
+    },
   },
   intents: {
     REVENUE_7D: {
@@ -96,6 +102,37 @@ export const QUERY_SURFACE = {
           AND "date" <= CURRENT_DATE
       `,
       examples: ["new users last 7 days", "new users this week"],
+    },
+    EVENTS_COUNT_7D: {
+      description: "Total events over the last 7 days",
+      entity: "events",
+      usesAggregate: true,
+      requiredFilters: ["tenantId", "last_7_days"],
+      sqlTemplate: `
+        SELECT COALESCE(SUM("count"), 0) AS total_events
+        FROM "EventDaily"
+        WHERE "tenantId" = $1
+          AND "date" >= (CURRENT_DATE - INTERVAL '6 days')
+          AND "date" <= CURRENT_DATE
+      `,
+      examples: ["events count", "usage last 7 days", "activity this week"],
+    },
+    TOP_EVENTS_7D: {
+      description: "Top events over the last 7 days",
+      entity: "events",
+      usesAggregate: true,
+      requiredFilters: ["tenantId", "last_7_days"],
+      sqlTemplate: `
+        SELECT "event", COALESCE(SUM("count"), 0) AS total
+        FROM "EventDaily"
+        WHERE "tenantId" = $1
+          AND "date" >= (CURRENT_DATE - INTERVAL '6 days')
+          AND "date" <= CURRENT_DATE
+        GROUP BY "event"
+        ORDER BY total DESC
+        LIMIT 5
+      `,
+      examples: ["top events", "top usage events", "most common events"],
     },
   },
   cache: {

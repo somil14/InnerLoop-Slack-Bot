@@ -35,6 +35,7 @@ model Tenant {
   revenueEvents RevenueEvent[]
   revenueDaily  RevenueDaily[]
   userDaily     UserDaily[]
+  eventDaily    EventDaily[]
   metricQueries MetricQuery[]
   anomalies     Anomaly[]
   scheduledReports ScheduledReport[]
@@ -71,6 +72,17 @@ model UserDaily {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@id([tenantId, date])
+}
+
+model EventDaily {
+  tenantId String
+  date     DateTime
+  event    String
+  count    Int
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, date, event])
 }
 
 model Anomaly {
