@@ -39,8 +39,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const accessToken = data.access_token;
-  const refreshToken = data.refresh_token ?? null;
+  const accessToken = data.access_token?.trim();
+  const refreshToken = data.refresh_token?.trim() ?? null;
   const accessPrefix = accessToken ? accessToken.slice(0, 5) : null;
   const refreshPrefix = refreshToken ? refreshToken.slice(0, 5) : null;
   const authedUserPrefix = data.authed_user?.access_token

@@ -49,7 +49,7 @@ export async function getValidBotToken(tenant) {
   }
 
   if (tenant.botToken && !isExpired(tenant.botTokenExpiresAt)) {
-    return tenant.botToken;
+    return tenant.botToken.trim();
   }
 
   const tenantId = tenant.id || tenant.tenantId;
@@ -57,7 +57,7 @@ export async function getValidBotToken(tenant) {
     throw new Error("Missing tenant id for token refresh");
   }
 
-  const refreshed = await refreshToken(tenant.botRefreshToken);
+  const refreshed = await refreshToken(tenant.botRefreshToken?.trim());
 
   await pool.query(
     `
@@ -68,12 +68,12 @@ export async function getValidBotToken(tenant) {
       WHERE "id" = $4
     `,
     [
-      refreshed.accessToken,
-      refreshed.refreshToken,
+      refreshed.accessToken?.trim(),
+      refreshed.refreshToken?.trim(),
       refreshed.expiresAt,
       tenantId,
     ]
   );
 
-  return refreshed.accessToken;
+  return refreshed.accessToken?.trim();
 }
