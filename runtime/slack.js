@@ -59,6 +59,9 @@ const app = new App({
 
 app.message(async ({ message, say, context }) => {
   if (!message || !("text" in message) || !message.text) return;
+  // Ignore bot messages (including our own)
+  if (message.subtype === "bot_message" || message.bot_id) return;
+  if (context?.botUserId && message.user === context.botUserId) return;
 
   const text = message.text || "";
   const intent = detectIntent(text);
