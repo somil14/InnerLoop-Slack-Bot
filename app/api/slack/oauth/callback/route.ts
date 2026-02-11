@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const redirectUri =
+    process.env.SLACK_REDIRECT_URI ||
+    'https://innerloop-bot.vercel.app/api/slack/oauth/callback';
+
   const response = await fetch('https://slack.com/api/oauth.v2.access', {
     method: 'POST',
     headers: {
@@ -19,6 +23,7 @@ export async function GET(req: NextRequest) {
     },
     body: new URLSearchParams({
       code,
+      redirect_uri: redirectUri,
       client_id: process.env.SLACK_CLIENT_ID!,
       client_secret: process.env.SLACK_CLIENT_SECRET!,
     }),
@@ -34,17 +39,37 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // TODO: persist securely
-  // data.access_token (xoxb-...)
-  // data.team.id
-  // data.enterprise?.id
-  // data.scope
+  const accessToken = data.access_token;
+  const refreshToken = data.refresh_token ?? null;
+  const accessPrefix = accessToken ? accessToken.slice(0, 5) : null;
+  const refreshPrefix = refreshToken ? refreshToken.slice(0, 5) : null;
+  const authedUserPrefix = data.authed_user?.access_token
+    ? data.authed_user.access_token.slice(0, 5)
+    : null;
+
+  console.log('Slack OAuth response summary', {
+    ok: data.ok,
+    teamId: data.team?.id,
+    accessPrefix,
+    refreshPrefix,
+    authedUserPrefix,
+    expiresIn: data.expires_in,
+    tokenType: data.token_type,
+  });
+
+  if (!accessToken || !accessToken.startsWith('xoxb-')) {
+    console.error('Expected xoxb bot token, received:', accessPrefix);
+    return NextResponse.json(
+      { error: 'Bot token not issued. Reinstall the app.' },
+      { status: 500 }
+    );
+  }
 
   await prisma.tenant.upsert({
     where: { slackTeamId: data.team.id },
     update: {
-      botToken: data.access_token,
-      botRefreshToken: data.refresh_token ?? undefined,
+      botToken: accessToken,
+      botRefreshToken: refreshToken ?? undefined,
       botTokenExpiresAt: data.expires_in
         ? new Date(Date.now() + data.expires_in * 1000)
         : undefined,
@@ -52,8 +77,8 @@ export async function GET(req: NextRequest) {
     create: {
       name: data.team.id,
       slackTeamId: data.team.id,
-      botToken: data.access_token,
-      botRefreshToken: data.refresh_token ?? null,
+      botToken: accessToken,
+      botRefreshToken: refreshToken,
       botTokenExpiresAt: data.expires_in
         ? new Date(Date.now() + data.expires_in * 1000)
         : null,
