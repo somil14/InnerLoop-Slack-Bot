@@ -168,7 +168,58 @@ app.message(async ({ message, say, context }) => {
   }
 
   if (intent === "USERS") {
-    await say("👥 User metrics are coming soon.");
+    const teamId = context?.teamId || message.team;
+    if (!teamId) {
+      await say("Missing team context. Please reinstall the app.");
+      return;
+    }
+
+    const tenant = await resolveTenant(teamId);
+    if (!tenant?.id) {
+      await say("Workspace not registered. Please reinstall the app.");
+      return;
+    }
+    const tenantId = tenant.id;
+
+    const limit = await checkLimit(tenant.plan, tenantId, "queries");
+    if (!limit.allowed) {
+      await say(
+        `⚠️ Query limit reached (${limit.used}/${limit.limit}). Please upgrade your plan.`
+      );
+      return;
+    }
+
+    const isNew = normalizedText.includes("new");
+    const intentKey = isNew ? "NEW_USERS_7D" : "USERS_7D";
+    const sql = getSqlForIntent(intentKey);
+
+    if (!sql) {
+      await say("⚠️ No SQL template found for user metrics.");
+      return;
+    }
+
+    const normalizedSql = sql.trim().toLowerCase();
+    const banned = ["insert", "update", "delete", "drop", "alter", "create"];
+    const isSelect = normalizedSql.startsWith("select");
+    const hasBanned = banned.some((kw) => normalizedSql.includes(kw));
+    const hasTenantFilter =
+      normalizedSql.includes("tenantid") || normalizedSql.includes("tenant_id");
+
+    if (!isSelect || hasBanned || !hasTenantFilter) {
+      await say("Unsafe query blocked. Please ask a read-only question.");
+      return;
+    }
+
+    const result = await pool.query(sql, [tenantId]);
+    const row = result.rows?.[0] || {};
+
+    if (isNew) {
+      await say(`👥 New users (7d): ${row.new_users ?? 0}`);
+    } else {
+      await say(`👥 Active users (7d): ${row.active ?? 0}`);
+    }
+
+    await incrementUsage(tenantId, "queries", 1);
     return;
   }
 

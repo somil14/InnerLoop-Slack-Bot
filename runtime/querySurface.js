@@ -69,6 +69,34 @@ export const QUERY_SURFACE = {
       `,
       examples: ["compare revenue week over week", "revenue wow"],
     },
+    USERS_7D: {
+      description: "Active users over the last 7 days",
+      entity: "users",
+      usesAggregate: true,
+      requiredFilters: ["tenantId", "last_7_days"],
+      sqlTemplate: `
+        SELECT COALESCE(SUM("active"), 0) AS active
+        FROM "UserDaily"
+        WHERE "tenantId" = $1
+          AND "date" >= (CURRENT_DATE - INTERVAL '6 days')
+          AND "date" <= CURRENT_DATE
+      `,
+      examples: ["active users", "users last 7 days"],
+    },
+    NEW_USERS_7D: {
+      description: "New users over the last 7 days",
+      entity: "users",
+      usesAggregate: true,
+      requiredFilters: ["tenantId", "last_7_days"],
+      sqlTemplate: `
+        SELECT COALESCE(SUM("new"), 0) AS new_users
+        FROM "UserDaily"
+        WHERE "tenantId" = $1
+          AND "date" >= (CURRENT_DATE - INTERVAL '6 days')
+          AND "date" <= CURRENT_DATE
+      `,
+      examples: ["new users last 7 days", "new users this week"],
+    },
   },
   cache: {
     scope: "tenant",
