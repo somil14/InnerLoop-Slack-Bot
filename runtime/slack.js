@@ -6,6 +6,7 @@ import { detectIntent } from "./intentMatcher.js";
 import { getCache, setCache } from "./cache.js";
 import { QUERY_SURFACE } from "./querySurface.js";
 import { checkLimit, incrementUsage } from "./usage.js";
+import { getValidBotToken } from "./slackToken.js";
 
 const REVENUE_INTENTS = QUERY_SURFACE?.intents || {};
 const CACHE_TTL_SECONDS = QUERY_SURFACE?.cache?.ttlSeconds ?? 86400;
@@ -27,9 +28,32 @@ async function resolveTenant(teamId) {
   return tenantResult.rows?.[0] || null;
 }
 
+async function loadTenantAuth(teamId) {
+  const tenantResult = await pool.query(
+    `
+      SELECT "id", "botToken", "botRefreshToken", "botTokenExpiresAt"
+      FROM "Tenant"
+      WHERE "slackTeamId" = $1
+      LIMIT 1
+    `,
+    [teamId]
+  );
+  return tenantResult.rows?.[0] || null;
+}
+
 const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
-  token: process.env.SLACK_BOT_TOKEN,
+  authorize: async ({ teamId }) => {
+    if (!teamId) {
+      throw new Error("Missing teamId for Slack authorization");
+    }
+    const tenant = await loadTenantAuth(teamId);
+    if (!tenant) {
+      throw new Error("Workspace not registered. Please reinstall the app.");
+    }
+    const botToken = await getValidBotToken(tenant);
+    return { botToken, teamId };
+  },
   socketMode: true,
 });
 
