@@ -11,7 +11,7 @@ primary_region = 'bom'
 
 [[cron]]
   schedule = "5 0 * * *"
-  command = "node runtime/aggregate.js && node runtime/aggregateUsers.js"
+  command = "node runtime/aggregate.js && node runtime/aggregateUsers.js && node runtime/anomaly.js"
 
 [[vm]]
   memory = '1gb'

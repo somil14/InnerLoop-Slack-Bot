@@ -26,6 +26,7 @@ model Tenant {
   name        String
   slackTeamId String   @unique
   botToken    String?
+  alertChannelId String?
   plan        String   @default("free")
   createdAt   DateTime @default(now())
 
@@ -65,4 +66,18 @@ model UserDaily {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@id([tenantId, date])
+}
+
+model Anomaly {
+  id        String   @id @default(uuid())
+  tenantId  String
+  type      String
+  metric    String
+  value     Decimal @db.Decimal(12, 2)
+  baseline  Decimal @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
 }

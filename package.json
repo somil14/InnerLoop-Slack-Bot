@@ -9,6 +9,7 @@
     "slack:listen": "tsx runtime/slack.ts",
     "aggregate:revenue": "node runtime/aggregate.js",
     "aggregate:users": "node runtime/aggregateUsers.js",
+    "anomaly:revenue": "node runtime/anomaly.js",
     "seed": "npx prisma db execute --file prisma/seed.sql",
     "lint": "eslint"
   },

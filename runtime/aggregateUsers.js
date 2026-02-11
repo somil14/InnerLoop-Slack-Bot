@@ -20,7 +20,7 @@ function getTargetDate() {
 const SQL = `
   INSERT INTO "UserDaily" ("tenantId", "date", "active", "new")
   SELECT
-    "tenantId",
+    "id",
     $1::date AS date,
     0 AS active,
     0 AS new
