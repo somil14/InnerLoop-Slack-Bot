@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { neon } from "@neondatabase/serverless";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
@@ -10,8 +9,7 @@ function createPrismaClient() {
     throw new Error("DATABASE_URL is required to initialize PrismaClient");
   }
 
-  const sql = neon(databaseUrl);
-  const adapter = new PrismaNeon(sql);
+  const adapter = new PrismaNeon({ connectionString: databaseUrl });
 
   return new PrismaClient({ adapter, log: ["error"] });
 }
