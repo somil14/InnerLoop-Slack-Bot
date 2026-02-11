@@ -13,6 +13,10 @@ primary_region = 'bom'
   schedule = "5 0 * * *"
   command = "node runtime/aggregate.js && node runtime/aggregateUsers.js && node runtime/anomaly.js"
 
+[[cron]]
+  schedule = "0 9 * * *"
+  command = "node runtime/scheduledReports.js"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'

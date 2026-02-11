@@ -35,6 +35,7 @@ model Tenant {
   userDaily     UserDaily[]
   metricQueries MetricQuery[]
   anomalies     Anomaly[]
+  scheduledReports ScheduledReport[]
 }
 
 model RevenueEvent {
@@ -81,4 +82,18 @@ model Anomaly {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, createdAt])
+}
+
+model ScheduledReport {
+  id        String   @id @default(uuid())
+  tenantId  String
+  frequency String
+  channelId String
+  type      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, frequency])
 }
