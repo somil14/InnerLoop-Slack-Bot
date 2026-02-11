@@ -1,10 +1,13 @@
 import { WebClient } from "@slack/web-api";
 import { pool } from "./db.js";
+import { getValidBotToken } from "./slackToken.js";
 
 const SUPPORTED_TYPES = new Set(["executive_summary"]);
 
-async function sendMessage(token, channel, text) {
-  if (!token || !channel) return;
+async function sendMessage(tenant, channel, text) {
+  if (!channel) return;
+  const token = await getValidBotToken(tenant);
+  if (!token) return;
   const client = new WebClient(token);
   await client.chat.postMessage({ channel, text });
 }
@@ -102,7 +105,7 @@ async function main() {
     `
       SELECT "ScheduledReport"."id", "ScheduledReport"."tenantId", "ScheduledReport"."frequency",
              "ScheduledReport"."channelId", "ScheduledReport"."type",
-             "Tenant"."botToken"
+             "Tenant"."botToken", "Tenant"."botRefreshToken", "Tenant"."botTokenExpiresAt"
       FROM "ScheduledReport"
       JOIN "Tenant" ON "Tenant"."id" = "ScheduledReport"."tenantId"
       WHERE "ScheduledReport"."active" = true
@@ -122,7 +125,11 @@ async function main() {
     };
 
     const text = formatExecutiveSummary(metrics);
-    await sendMessage(report.botToken, report.channelId, text);
+    try {
+      await sendMessage(report, report.channelId, text);
+    } catch (err) {
+      console.error("Failed to send scheduled report", err);
+    }
   }
 }
 

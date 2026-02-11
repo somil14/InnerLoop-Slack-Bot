@@ -42,11 +42,21 @@ export async function GET(req: NextRequest) {
 
   await prisma.tenant.upsert({
     where: { slackTeamId: data.team.id },
-    update: { botToken: data.access_token },
+    update: {
+      botToken: data.access_token,
+      botRefreshToken: data.refresh_token ?? undefined,
+      botTokenExpiresAt: data.expires_in
+        ? new Date(Date.now() + data.expires_in * 1000)
+        : undefined,
+    },
     create: {
       name: data.team.id,
       slackTeamId: data.team.id,
       botToken: data.access_token,
+      botRefreshToken: data.refresh_token ?? null,
+      botTokenExpiresAt: data.expires_in
+        ? new Date(Date.now() + data.expires_in * 1000)
+        : null,
     },
   });
 

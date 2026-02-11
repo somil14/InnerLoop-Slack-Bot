@@ -1,18 +1,21 @@
 import { randomUUID } from "crypto";
 import { WebClient } from "@slack/web-api";
 import { pool } from "./db.js";
+import { getValidBotToken } from "./slackToken.js";
 
 const THRESHOLD_RATIO = 0.8;
 
-async function sendSlackAlert(token, channel, text) {
-  if (!token || !channel) return;
+async function sendSlackAlert(tenant, channel, text) {
+  if (!channel) return;
+  const token = await getValidBotToken(tenant);
+  if (!token) return;
   const client = new WebClient(token);
   await client.chat.postMessage({ channel, text });
 }
 
 async function main() {
   const tenants = await pool.query(
-    `SELECT "id", "botToken", "alertChannelId" FROM "Tenant"`
+    `SELECT "id", "botToken", "botRefreshToken", "botTokenExpiresAt", "alertChannelId" FROM "Tenant"`
   );
 
   for (const row of tenants.rows) {
@@ -71,13 +74,17 @@ async function main() {
     );
 
     const pct = Math.round((1 - today / baseline) * 100);
-    await sendSlackAlert(
-      row.botToken,
-      row.alertChannelId,
-      `🚨 Revenue dropped ${pct}% vs 7-day average. Today: $${today.toFixed(
-        2
-      )}, baseline: $${baseline.toFixed(2)}.`
-    );
+    try {
+      await sendSlackAlert(
+        row,
+        row.alertChannelId,
+        `🚨 Revenue dropped ${pct}% vs 7-day average. Today: $${today.toFixed(
+          2
+        )}, baseline: $${baseline.toFixed(2)}.`
+      );
+    } catch (err) {
+      console.error("Failed to send Slack alert", err);
+    }
   }
 }
 

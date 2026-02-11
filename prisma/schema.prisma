@@ -26,6 +26,8 @@ model Tenant {
   name        String
   slackTeamId String   @unique
   botToken    String?
+  botRefreshToken String?
+  botTokenExpiresAt DateTime?
   alertChannelId String?
   plan        String   @default("free")
   createdAt   DateTime @default(now())
