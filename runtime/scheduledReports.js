@@ -1,6 +1,7 @@
 import { WebClient } from "@slack/web-api";
 import { pool } from "./db.js";
 import { getValidBotToken } from "./slackToken.js";
+import { checkLimit, incrementUsage } from "./usage.js";
 
 const SUPPORTED_TYPES = new Set(["executive_summary"]);
 
@@ -105,7 +106,8 @@ async function main() {
     `
       SELECT "ScheduledReport"."id", "ScheduledReport"."tenantId", "ScheduledReport"."frequency",
              "ScheduledReport"."channelId", "ScheduledReport"."type",
-             "Tenant"."botToken", "Tenant"."botRefreshToken", "Tenant"."botTokenExpiresAt"
+             "Tenant"."botToken", "Tenant"."botRefreshToken", "Tenant"."botTokenExpiresAt",
+             "Tenant"."plan"
       FROM "ScheduledReport"
       JOIN "Tenant" ON "Tenant"."id" = "ScheduledReport"."tenantId"
       WHERE "ScheduledReport"."active" = true
@@ -124,9 +126,15 @@ async function main() {
       ...(await getUserMetrics(report.tenantId)),
     };
 
+    const limit = await checkLimit(report.plan, report.tenantId, "reports");
+    if (!limit.allowed) {
+      continue;
+    }
+
     const text = formatExecutiveSummary(metrics);
     try {
       await sendMessage(report, report.channelId, text);
+      await incrementUsage(report.tenantId, "reports", 1);
     } catch (err) {
       console.error("Failed to send scheduled report", err);
     }

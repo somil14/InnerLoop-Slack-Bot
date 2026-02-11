@@ -5,6 +5,7 @@ import { HELP_TEXT } from "./help.js";
 import { detectIntent } from "./intentMatcher.js";
 import { getCache, setCache } from "./cache.js";
 import { QUERY_SURFACE } from "./querySurface.js";
+import { checkLimit, incrementUsage } from "./usage.js";
 
 const REVENUE_INTENTS = QUERY_SURFACE?.intents || {};
 const CACHE_TTL_SECONDS = QUERY_SURFACE?.cache?.ttlSeconds ?? 86400;
@@ -18,12 +19,12 @@ function getSqlForIntent(intentKey) {
   return intent?.sqlTemplate?.trim() || null;
 }
 
-async function resolveTenantId(teamId) {
+async function resolveTenant(teamId) {
   const tenantResult = await pool.query(
-    `SELECT "id" FROM "Tenant" WHERE "slackTeamId" = $1 LIMIT 1`,
+    `SELECT "id", "plan" FROM "Tenant" WHERE "slackTeamId" = $1 LIMIT 1`,
     [teamId]
   );
-  return tenantResult.rows?.[0]?.id || null;
+  return tenantResult.rows?.[0] || null;
 }
 
 const app = new App({
@@ -51,10 +52,19 @@ app.message(async ({ message, say, context }) => {
       return;
     }
 
-    const tenantId = await resolveTenantId(teamId);
+    const tenant = await resolveTenant(teamId);
 
-    if (!tenantId) {
+    if (!tenant?.id) {
       await say("Workspace not registered. Please reinstall the app.");
+      return;
+    }
+    const tenantId = tenant.id;
+
+    const limit = await checkLimit(tenant.plan, tenantId, "queries");
+    if (!limit.allowed) {
+      await say(
+        `⚠️ Query limit reached (${limit.used}/${limit.limit}). Please upgrade your plan.`
+      );
       return;
     }
 
@@ -120,11 +130,13 @@ app.message(async ({ message, say, context }) => {
       await say(
         `📊 This week: $${row.this_week ?? 0}, last week: $${row.last_week ?? 0}`
       );
+      await incrementUsage(tenantId, "queries", 1);
       return;
     }
 
     const value = row.revenue ?? row.sum ?? 0;
     await say(`📊 Result: $${value}`);
+    await incrementUsage(tenantId, "queries", 1);
     return;
   }
 
